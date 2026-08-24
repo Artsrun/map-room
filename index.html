@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07080c" />
+  <title>MAP ROOM</title>
+  <style>
+    :root {
+      --bg: #07080c;
+      --ink: #d7e0ea;
+      --muted: #7d8b99;
+      --line: #2a3540;
+      --accent: #c9a227;
+      --ok: #3ecf8e;
+      --bad: #e35d5d;
+      --face: min(72vmin, 720px);
+      --well: min(42vmin, 420px);
+      --hud: env(safe-area-inset-top, 0px);
+      --hud-b: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font: 13px/1.4 ui-monospace, "IBM Plex Mono", Menlo, Consolas, monospace;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button, select, a, area, img[usemap] { touch-action: manipulation; }
+    button:focus-visible, select:focus-visible, a:focus-visible {
+      outline: 1px solid var(--accent);
+      outline-offset: 2px;
+    }
+    #stage {
+      position: fixed; inset: 0;
+      perspective: 1400px;
+      perspective-origin: 50% 46%;
+      background: radial-gradient(ellipse 80% 60% at 50% 40%, #121820 0%, #07080c 70%);
+    }
+    #world {
+      position: absolute;
+      left: 50%; top: 48%;
+      width: var(--face); height: var(--face);
+      margin: calc(var(--face) / -2) 0 0 calc(var(--face) / -2);
+      transform-style: preserve-3d;
+      transform: rotateX(var(--rx)) rotateY(var(--ry)) translateZ(var(--tz));
+      will-change: transform;
+    }
+    .face {
+      position: absolute; inset: 0;
+      overflow: hidden;
+      background: #0b0e12;
+      border: 1px solid #1c242c;
+      box-shadow: inset 0 0 80px rgba(0,0,0,.5);
+    }
+    .grid {
+      display: grid;
+      width: 100%; height: 100%;
+      grid-template-columns: repeat(var(--cols), 1fr);
+      grid-template-rows: repeat(var(--rows), 1fr);
+      gap: 0;
+    }
+    .grid img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #10151b;
+      opacity: 0;
+      transition: opacity .25s ease;
+      pointer-events: none;
+      filter: saturate(.88) contrast(1.04);
+    }
+    .grid img.on { opacity: 1; }
+    .caption {
+      position: absolute; left: 10px; bottom: 8px;
+      padding: 3px 8px;
+      background: rgba(7,8,12,.72);
+      border: 1px solid var(--line);
+      color: var(--accent);
+      letter-spacing: .08em;
+      font-size: 10px;
+      pointer-events: none;
+    }
+    #f-n { transform: rotateY(0deg)   translateZ(calc(var(--face) / 2)); }
+    #f-s { transform: rotateY(180deg) translateZ(calc(var(--face) / 2)); }
+    #f-e { transform: rotateY(90deg)  translateZ(calc(var(--face) / 2)); }
+    #f-w { transform: rotateY(-90deg) translateZ(calc(var(--face) / 2)); }
+    #f-floor { transform: rotateX(-90deg) translateZ(calc(var(--face) / 2)); }
+    #f-ceil  { transform: rotateX(90deg)  translateZ(calc(var(--face) / 2)); opacity: .55; }
+    #well {
+      position: absolute; left: 50%; top: 50%;
+      width: var(--well); height: var(--well);
+      margin: calc(var(--well) / -2) 0 0 calc(var(--well) / -2);
+      transform-style: preserve-3d;
+      pointer-events: none;
+    }
+    .plane {
+      position: absolute; inset: 0;
+      transform: translateZ(var(--pz)) scale(var(--ps));
+      border: 1px solid rgba(201,162,39,.28);
+      overflow: hidden;
+      background: #000;
+    }
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 8; }
+    #hud > * { pointer-events: auto; }
+    header.top {
+      position: absolute;
+      top: calc(12px + var(--hud));
+      left: 12px; right: 12px;
+      display: flex; justify-content: space-between; gap: 10px;
+      align-items: flex-start;
+    }
+    .brand, .chip, #readout, #dock-box, #minimap-wrap {
+      border: 1px solid var(--line);
+      background: rgba(7,8,12,.82);
+      backdrop-filter: blur(8px);
+    }
+    .brand { padding: 9px 12px; }
+    .brand b { color: var(--accent); letter-spacing: .16em; font-weight: 600; }
+    .brand small { display: block; color: var(--muted); margin-top: 3px; }
+    .flags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .chip { padding: 7px 9px; font-size: 11px; color: var(--muted); }
+    .chip.on { border-color: var(--ok); color: var(--ok); }
+    .chip.warn { border-color: var(--accent); color: var(--accent); }
+    .chip.bad { border-color: var(--bad); color: var(--bad); }
+    #dock {
+      position: absolute;
+      left: 12px;
+      bottom: calc(12px + var(--hud-b));
+      display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+      max-width: calc(100vw - 24px);
+    }
+    #minimap-wrap { position: relative; width: 200px; height: 200px; flex: 0 0 auto; }
+    #minimap-wrap img { width: 100%; height: 100%; display: block; cursor: crosshair; }
+    #minimap-wrap .cross {
+      position: absolute; inset: 0; pointer-events: none; opacity: .45;
+      background:
+        linear-gradient(to right, transparent 49.5%, var(--accent) 49.5%, var(--accent) 50.5%, transparent 50.5%),
+        linear-gradient(to bottom, transparent 49.5%, var(--accent) 49.5%, var(--accent) 50.5%, transparent 50.5%);
+    }
+    #minimap-wrap .hint {
+      position: absolute; left: 6px; bottom: 6px;
+      font-size: 10px; color: var(--accent);
+      pointer-events: none;
+    }
+    #dock-box { padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+    #jumps { display: flex; flex-wrap: wrap; gap: 4px; }
+    button, select {
+      font: inherit; color: var(--ink);
+      background: #0c1016;
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+    button:hover, select:hover { border-color: var(--accent); color: var(--accent); }
+    button.active { border-color: var(--ok); color: var(--ok); }
+    #readout {
+      position: absolute;
+      right: 12px;
+      bottom: calc(12px + var(--hud-b));
+      padding: 10px 12px;
+      min-width: 220px;
+    }
+    #readout dt { color: var(--muted); float: left; clear: left; width: 64px; }
+    #readout dd { margin-left: 64px; }
+    kbd { border: 1px solid var(--line); padding: 0 4px; color: var(--muted); }
+    canvas#hic {
+      position: absolute; right: 12px; top: calc(86px + var(--hud));
+      width: 260px; height: 148px;
+      border: 1px solid var(--line);
+    }
+    canvas#hic[hidden] { display: none; }
+    .hic-card {
+      width: 240px; padding: 10px 12px;
+      color: #e8eef4;
+      background: linear-gradient(180deg, #141a22, #0c1016);
+      border: 1px solid #3a2e12;
+      font: 12px/1.35 ui-monospace, Menlo, monospace;
+    }
+    .hic-card h3 { color: var(--accent); font-size: 11px; letter-spacing: .14em; margin-bottom: 6px; }
+    .ok { color: var(--ok); } .no { color: var(--bad); }
+    a.attr { color: var(--muted); text-decoration: none; font-size: 10px; }
+    a.attr:hover { color: var(--accent); }
+    @media (max-width: 720px) {
+      .brand small { display: none; }
+      #readout { display: none; }
+      canvas#hic { display: none; }
+      #minimap-wrap { width: 148px; height: 148px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .grid img { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="world" style="--rx:-28deg;--ry:22deg;--tz:-120px;">
+      <div class="face" id="f-n"><div class="grid"></div><span class="caption">N</span></div>
+      <div class="face" id="f-s"><div class="grid"></div><span class="caption">S</span></div>
+      <div class="face" id="f-e"><div class="grid"></div><span class="caption">E</span></div>
+      <div class="face" id="f-w"><div class="grid"></div><span class="caption">W</span></div>
+      <div class="face" id="f-floor"><div class="grid"></div><span class="caption">FLOOR</span></div>
+      <div class="face" id="f-ceil"><div class="grid"></div><span class="caption">CEIL</span></div>
+      <div id="well"></div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <header class="top">
+      <div class="brand">
+        <b>MAP ROOM</b>
+        <small>CSS 3D · CartoCDN · &lt;map&gt; · update-the-rendering</small>
+      </div>
+      <div class="flags">
+        <span class="chip" id="flag-test">tests: …</span>
+        <span class="chip" id="flag-hic">hic: —</span>
+        <span class="chip" id="flag-paint">paint: rAF</span>
+      </div>
+    </header>
+
+    <canvas id="hic" width="520" height="296" hidden layoutsubtree>
+      <div class="hic-card" id="hic-card">
+        <h3>RENDER SNAPSHOT</h3>
+        <div id="hic-body">detecting drawElementImage…</div>
+      </div>
+    </canvas>
+
+    <div id="dock">
+      <div id="minimap-wrap">
+        <img id="mini" alt="overview, click to fly" usemap="#hotspots" width="200" height="200" />
+        <div class="cross"></div>
+        <div class="hint">click to fly</div>
+        <map name="hotspots">
+          <area shape="rect" coords="0,0,90,200" href="#west" alt="Anatolia" data-lat="39.93" data-lon="32.86" data-z="7" />
+          <area shape="rect" coords="90,0,200,200" href="#east" alt="Caucasus" data-lat="40.19" data-lon="44.52" data-z="7" />
+        </map>
+      </div>
+      <div id="dock-box">
+        <select id="style" aria-label="basemap style">
+          <option value="dark_all">Dark Matter</option>
+          <option value="rastertiles/voyager">Voyager</option>
+          <option value="light_all">Positron</option>
+          <option value="dark_nolabels">Dark · no labels</option>
+          <option value="rastertiles/voyager_nolabels">Voyager · no labels</option>
+        </select>
+        <div id="jumps"></div>
+        <button type="button" id="btn-reset">Reset room</button>
+        <div style="color:var(--muted);font-size:11px">
+          drag · wheel dolly · <kbd>shift</kbd>+wheel zoom · <kbd>WASD</kbd>
+        </div>
+        <a class="attr" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OSM · © CARTO</a>
+      </div>
+    </div>
+
+    <dl id="readout">
+      <dt>lat</dt><dd id="r-lat">—</dd>
+      <dt>lon</dt><dd id="r-lon">—</dd>
+      <dt>zoom</dt><dd id="r-z">—</dd>
+      <dt>tile</dt><dd id="r-tile">—</dd>
+      <dt>reqs</dt><dd id="r-reqs">—</dd>
+    </dl>
+  </div>
+
+<script type="module">
+const SUBS = ['a', 'b', 'c', 'd'];
+const JUMPS = [
+  { id: 'yerevan', label: 'Yerevan', lat: 40.1872, lon: 44.5152, z: 11 },
+  { id: 'ararat', label: 'Ararat', lat: 39.7015, lon: 44.2983, z: 10 },
+  { id: 'tbilisi', label: 'Tbilisi', lat: 41.7151, lon: 44.8271, z: 11 },
+  { id: 'istanbul', label: 'Istanbul', lat: 41.0082, lon: 28.9784, z: 10 },
+  { id: 'ankara', label: 'Ankara', lat: 39.9334, lon: 32.8597, z: 10 },
+];
+
+const state = {
+  lat: 40.1872,
+  lon: 44.5152,
+  z: 6,
+  style: 'dark_all',
+  rx: -28,
+  ry: 22,
+  tz: -120,
+  dragging: false,
+  px: 0, py: 0,
+  pinch0: 0,
+  reqs: 0,
+};
+
+const HAS_HIC =
+  'requestPaint' in HTMLCanvasElement.prototype &&
+  typeof CanvasRenderingContext2D !== 'undefined' &&
+  'drawElementImage' in CanvasRenderingContext2D.prototype;
+
+const $ = (id) => document.getElementById(id);
+const worldEl = $('world');
+
+const lon2x = (lon, z) => ((lon + 180) / 360) * 2 ** z;
+const lat2y = (lat, z) => {
+  const s = Math.sin((lat * Math.PI) / 180);
+  const t = Math.max(-0.9999, Math.min(0.9999, s));
+  return (0.5 - Math.log((1 + t) / (1 - t)) / (4 * Math.PI)) * 2 ** z;
+};
+const x2lon = (x, z) => (x / 2 ** z) * 360 - 180;
+const y2lat = (y, z) => {
+  const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+};
+const wrap = (v, n) => ((v % n) + n) % n;
+
+const tileUrl = (style, z, x, y, retina = false) => {
+  const n = 2 ** z;
+  const xx = wrap(x, n) | 0;
+  const yy = Math.min(n - 1, Math.max(0, y | 0));
+  const s = SUBS[(xx + yy) & 3];
+  const r = retina && devicePixelRatio >= 1.5 ? '@2x' : '';
+  return `https://${s}.basemaps.cartocdn.com/${style}/${z}/${xx}/${yy}${r}.png`;
+};
+
+const nearly = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
+const runTests = () => {
+  const rows = [];
+  const ok = (name, cond) => rows.push({ name, cond: !!cond });
+  ok('lon2x(0,0)=0.5', nearly(lon2x(0, 0), 0.5));
+  ok('lon2x(180,1)=2', nearly(lon2x(180, 1), 2));
+  ok('lat2y(0,z)=2^(z-1)', nearly(lat2y(0, 4), 8));
+  ok('wrap(-1,4)=3', wrap(-1, 4) === 3);
+  ok('yerevan tile z2 = 2/1', (lon2x(44.5152, 2) | 0) === 2 && (lat2y(40.1872, 2) | 0) === 1);
+  ok('lon roundtrip', nearly(x2lon(lon2x(44.5152, 8), 8), 44.5152, 1e-6));
+  ok('lat roundtrip', nearly(y2lat(lat2y(40.1872, 8), 8), 40.1872, 1e-4));
+  ok('url shape', /basemaps\.cartocdn\.com\/dark_all\/2\/2\/1/.test(tileUrl('dark_all', 2, 2, 1)));
+  ok('hic detect boolean', typeof HAS_HIC === 'boolean');
+  return rows;
+};
+
+const fillGrid = (root, style, z, cx, cy, cols, rows) => {
+  root.style.setProperty('--cols', cols);
+  root.style.setProperty('--rows', rows);
+  const x0 = Math.floor(cx) - ((cols / 2) | 0);
+  const y0 = Math.floor(cy) - ((rows / 2) | 0);
+  const next = [];
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) next.push(tileUrl(style, z, x0 + i, y0 + j, true));
+  }
+  const prev = [...root.querySelectorAll('img')];
+  if (prev.length === next.length && prev.every((img, i) => img.dataset.src === next[i])) return;
+  root.replaceChildren();
+  const frag = document.createDocumentFragment();
+  for (const src of next) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.dataset.src = src;
+    img.src = src;
+    img.onload = () => img.classList.add('on');
+    img.onerror = () => { img.classList.add('on'); img.style.filter = 'grayscale(1)'; };
+    state.reqs++;
+    frag.append(img);
+  }
+  root.append(frag);
+};
+
+const paintFaces = () => {
+  const zWall = Math.max(2, state.z);
+  const zFloor = Math.max(1, state.z - 2);
+  const zCeil = Math.max(1, state.z - 3);
+  const cx = lon2x(state.lon, zWall);
+  const cy = lat2y(state.lat, zWall);
+  fillGrid($('f-n').querySelector('.grid'), state.style, zWall, cx, cy - 1.6, 3, 3);
+  fillGrid($('f-s').querySelector('.grid'), state.style, zWall, cx, cy + 1.6, 3, 3);
+  fillGrid($('f-e').querySelector('.grid'), state.style, zWall, cx + 1.6, cy, 3, 3);
+  fillGrid($('f-w').querySelector('.grid'), state.style, zWall, cx - 1.6, cy, 3, 3);
+  fillGrid($('f-floor').querySelector('.grid'), state.style, zFloor, lon2x(state.lon, zFloor), lat2y(state.lat, zFloor), 3, 3);
+  fillGrid($('f-ceil').querySelector('.grid'), 'dark_nolabels', zCeil, lon2x(state.lon, zCeil), lat2y(state.lat, zCeil), 2, 2);
+
+  const well = $('well');
+  const want = 4;
+  if (well.childElementCount !== want) {
+    well.replaceChildren();
+    for (let i = 0; i < want; i++) {
+      const plane = document.createElement('div');
+      plane.className = 'plane';
+      plane.style.setProperty('--pz', `${70 - i * 64}px`);
+      plane.style.setProperty('--ps', `${1 - i * 0.09}`);
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      plane.append(grid);
+      well.append(plane);
+    }
+  }
+  [...well.children].forEach((plane, i) => {
+    const zz = Math.min(18, state.z + i);
+    fillGrid(plane.querySelector('.grid'), state.style, zz, lon2x(state.lon, zz), lat2y(state.lat, zz), 2, 2);
+  });
+
+  const mini = $('mini');
+  const miniSrc = tileUrl(state.style, 2, 2, 1, true);
+  if (mini.dataset.src !== miniSrc) {
+    mini.dataset.src = miniSrc;
+    mini.src = miniSrc;
+    state.reqs++;
+  }
+
+  const n = 2 ** zWall;
+  $('r-lat').textContent = state.lat.toFixed(4);
+  $('r-lon').textContent = state.lon.toFixed(4);
+  $('r-z').textContent = String(state.z);
+  $('r-tile').textContent = `${wrap(cx, n) | 0}/${cy | 0}/${zWall}`;
+  $('r-reqs').textContent = String(state.reqs);
+  markJump();
+};
+
+const applyCam = () => {
+  worldEl.style.setProperty('--rx', `${state.rx}deg`);
+  worldEl.style.setProperty('--ry', `${state.ry}deg`);
+  worldEl.style.setProperty('--tz', `${state.tz}px`);
+};
+
+let dirtyTiles = true;
+let ticking = false;
+let tileTimer = 0;
+const frame = () => {
+  ticking = false;
+  applyCam();
+};
+const requestCam = () => {
+  if (!ticking) {
+    ticking = true;
+    requestAnimationFrame(frame);
+  }
+};
+const requestTiles = () => {
+  dirtyTiles = true;
+  clearTimeout(tileTimer);
+  tileTimer = setTimeout(() => {
+    if (!dirtyTiles) return;
+    dirtyTiles = false;
+    paintFaces();
+    if (HAS_HIC) $('hic').requestPaint();
+  }, 80);
+  requestCam();
+};
+
+const setView = (lat, lon, z) => {
+  state.lat = lat;
+  state.lon = lon;
+  state.z = Math.max(2, Math.min(16, z | 0));
+  requestTiles();
+};
+
+const jumpsEl = $('jumps');
+JUMPS.forEach((j) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.id = j.id;
+  b.textContent = j.label;
+  b.addEventListener('click', () => setView(j.lat, j.lon, j.z));
+  jumpsEl.append(b);
+});
+const markJump = () => {
+  for (const b of jumpsEl.children) {
+    const j = JUMPS.find((x) => x.id === b.dataset.id);
+    const on = Math.abs(j.lat - state.lat) < 0.05 && Math.abs(j.lon - state.lon) < 0.05;
+    b.classList.toggle('active', on);
+  }
+};
+
+$('style').addEventListener('change', (e) => {
+  state.style = e.target.value;
+  requestTiles();
+});
+$('btn-reset').addEventListener('click', () => {
+  state.rx = -28; state.ry = 22; state.tz = -120;
+  setView(40.1872, 44.5152, 6);
+});
+
+document.querySelectorAll('area[data-lat]').forEach((a) => {
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    setView(+a.dataset.lat, +a.dataset.lon, +a.dataset.z);
+  });
+});
+
+$('mini').addEventListener('click', (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const u = (e.clientX - r.left) / r.width;
+  const v = (e.clientY - r.top) / r.height;
+  setView(y2lat(1 + v, 2), x2lon(2 + u, 2), Math.max(state.z, 6));
+});
+
+const stage = $('stage');
+const pointers = new Map();
+stage.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('#hud')) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) {
+    state.dragging = true;
+    state.px = e.clientX;
+    state.py = e.clientY;
+    stage.setPointerCapture(e.pointerId);
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    state.pinch0 = Math.hypot(a.x - b.x, a.y - b.y);
+  }
+});
+stage.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (state.pinch0 > 0) {
+      const ratio = d / state.pinch0;
+      if (ratio > 1.12) { state.z = Math.min(16, state.z + 1); state.pinch0 = d; requestTiles(); }
+      else if (ratio < 0.88) { state.z = Math.max(2, state.z - 1); state.pinch0 = d; requestTiles(); }
+    }
+    return;
+  }
+  if (!state.dragging) return;
+  state.ry += (e.clientX - state.px) * 0.28;
+  state.rx += (e.clientY - state.py) * 0.28;
+  state.rx = Math.max(-88, Math.min(12, state.rx));
+  state.px = e.clientX;
+  state.py = e.clientY;
+  requestCam();
+});
+const endPtr = (e) => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) state.pinch0 = 0;
+  if (pointers.size === 0) state.dragging = false;
+};
+stage.addEventListener('pointerup', endPtr);
+stage.addEventListener('pointercancel', endPtr);
+
+stage.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (e.shiftKey || e.ctrlKey) {
+    state.z = Math.max(2, Math.min(16, state.z + (e.deltaY > 0 ? -1 : 1)));
+    requestTiles();
+  } else {
+    state.tz = Math.max(-720, Math.min(280, state.tz - e.deltaY * 0.45));
+    requestCam();
+  }
+}, { passive: false });
+
+addEventListener('keydown', (e) => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  const step = e.shiftKey ? 8 : 3;
+  if (e.key === 'w' || e.key === 'W') state.rx -= step;
+  else if (e.key === 's' || e.key === 'S') state.rx += step;
+  else if (e.key === 'a' || e.key === 'A') state.ry -= step;
+  else if (e.key === 'd' || e.key === 'D') state.ry += step;
+  else if (e.key === '+' || e.key === '=') { state.z = Math.min(16, state.z + 1); requestTiles(); return; }
+  else if (e.key === '-' || e.key === '_') { state.z = Math.max(2, state.z - 1); requestTiles(); return; }
+  else if (e.key === 'q') state.tz += 40;
+  else if (e.key === 'e') state.tz -= 40;
+  else return;
+  state.rx = Math.max(-88, Math.min(12, state.rx));
+  requestCam();
+});
+
+const tests = runTests();
+const passed = tests.filter((t) => t.cond).length;
+const flagTest = $('flag-test');
+flagTest.textContent = `tests: ${passed}/${tests.length}`;
+flagTest.classList.add(passed === tests.length ? 'on' : 'bad');
+ if (passed !== tests.length) console.warn(tests.filter((t) => !t.cond));
+
+const hicCanvas = $('hic');
+const hicCard = $('hic-card');
+const hicBody = $('hic-body');
+ if (HAS_HIC) {
+  $('flag-hic').textContent = 'hic: ON';
+  $('flag-hic').classList.add('on');
+  $('flag-paint').textContent = 'paint: onpaint';
+  $('flag-paint').classList.add('on');
+  hicCanvas.hidden = false;
+  hicBody.innerHTML = `<span class="ok">drawElementImage</span><br/>layoutsubtree · requestPaint`;
+  const ctx = hicCanvas.getContext('2d');
+  hicCanvas.onpaint = () => {
+    ctx.reset();
+    ctx.fillStyle = '#07080c';
+    ctx.fillRect(0, 0, hicCanvas.width, hicCanvas.height);
+    const t = ctx.drawElementImage(hicCard, 8, 8);
+    hicCard.style.transform = t.toString();
+  };
+  hicCanvas.requestPaint();
+} else {
+  $('flag-hic').textContent = 'hic: flag off';
+  $('flag-hic').classList.add('warn');
+  hicBody.innerHTML = `<span class="no">no drawElementImage</span><br/>flags/#canvas-draw-element`;
+}
+
+requestTiles();
+</script>
+</body>
+</html>
