@@ -1,43 +1,20 @@
 # MAP ROOM
 
-3D deep basemap room. Pure HTML / CSS / JS.
+Tilt the phone. The map is the room.
 
-**Live:** https://artsrun.github.io/map-room/
+WebGL2 fragment shader on four depth planes. Carto tiles. One bar.
 
-## Stack
+Open `index.html` (Pages: https://artsrun.github.io/map-room/ once enabled).
 
-| Layer | API |
+| Control | Does |
 |---|---|
-| Room | CSS `perspective` + `preserve-3d` |
-| Faces + well | Carto raster XYZ |
-| Fly-to | HTML `<map>` / `<area>` + city chips + minimap click |
-| Camera | pointer / pinch / wheel / WASD |
-| Frame | `requestAnimationFrame` (update-the-rendering) |
-| Optional | WICG `layoutsubtree` + `drawElementImage` + `onpaint` |
+| Look | device tilt (iOS asks once) |
+| Here | geolocation once |
+| city chips | jump |
+| drag / WASD | orbit if Look is off |
+| pinch · shift+wheel | zoom tiles |
+| wheel | dolly |
 
-Tiles: `https://{a-d}.basemaps.cartocdn.com/{style}/{z}/{x}/{y}@2x.png`  
-© OpenStreetMap · © CARTO
+Caps row is device truth: tests, webgl2, webgpu, gyro, geo, html-in-canvas flag.
 
-## Controls
-
-- drag — orbit
-- wheel — dolly (`shift`/`ctrl`+wheel = zoom)
-- pinch — zoom
-- `WASD` orbit · `Q`/`E` push · `+`/`-` zoom
-- minimap click — fly to that mercator point
-- chips — Yerevan / Ararat / Tbilisi / Istanbul / Ankara
-
-Chip `tests: n/n` is an in-page mercator + URL self-check.
-
-## html-in-canvas
-
-`chrome://flags/#canvas-draw-element` → Enabled → relaunch.
-
-Without the flag the room still runs (CSS HUD).
-
-Explainer: https://github.com/WICG/html-in-canvas
-
-## Pages
-
-Settings → Pages → Deploy from branch **prod** `/`  
-or the `pages` workflow on push to `prod`.
+Tiles `https://{a-d}.basemaps.cartocdn.com/{style}/{z}/{x}/{y}@2x.png` · © OSM · © CARTO
