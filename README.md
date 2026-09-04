@@ -1,20 +1,13 @@
-# MAP ROOM
+# Map
 
-Tilt the phone. The map is the room.
+A table you can tilt. WebGL well + a native HTML image map.
 
-WebGL2 fragment shader on four depth planes. Carto tiles. One bar.
+Open `index.html`.
 
-Open `index.html` (Pages: https://artsrun.github.io/map-room/ once enabled).
+- **Tilt** — phone gyro (iOS asks once)
+- **My location** — one GPS fix
+- overview image — native `<map>` / `<area>`
+- names — jump
+- drag / pinch if Tilt is off
 
-| Control | Does |
-|---|---|
-| Look | device tilt (iOS asks once) |
-| Here | geolocation once |
-| city chips | jump |
-| drag / WASD | orbit if Look is off |
-| pinch · shift+wheel | zoom tiles |
-| wheel | dolly |
-
-Caps row is device truth: tests, webgl2, webgpu, gyro, geo, html-in-canvas flag.
-
-Tiles `https://{a-d}.basemaps.cartocdn.com/{style}/{z}/{x}/{y}@2x.png` · © OSM · © CARTO
+Carto Voyager tiles. © OSM · © CARTO
