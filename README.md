@@ -1,13 +1,11 @@
 # Map
 
-A table you can tilt. WebGL well + a native HTML image map.
+Three pages, 120° apart. No tile vendor.
 
-Open `index.html`.
+https://artsrun.github.io/map-room/
 
-- **Tilt** — phone gyro (iOS asks once)
-- **My location** — one GPS fix
-- overview image — native `<map>` / `<area>`
-- names — jump
-- drag / pinch if Tilt is off
+- swipe or City / Ridge / Road
+- tap a mark — native HTML image map, highlight + link
+- WebGL2 sky (120° sectors)
 
-Carto Voyager tiles. © OSM · © CARTO
+Drawn here. Not Carto, not OSM tiles.
